@@ -32,120 +32,133 @@ using System.Text;
 
 namespace WebSocketSharp.Net
 {
-  internal abstract class AuthenticationBase
-  {
-    #region Private Fields
-
-    private AuthenticationSchemes _scheme;
-
-    #endregion
-
-    #region Internal Fields
-
-    internal NameValueCollection Parameters;
-
-    #endregion
-
-    #region Protected Constructors
-
-    protected AuthenticationBase (AuthenticationSchemes scheme, NameValueCollection parameters)
+    internal abstract class AuthenticationBase
     {
-      _scheme = scheme;
-      Parameters = parameters;
-    }
+        #region Private Fields
 
-    #endregion
+        private readonly AuthenticationSchemes _scheme;
 
-    #region Public Properties
+        #endregion
 
-    public string Algorithm {
-      get {
-        return Parameters["algorithm"];
-      }
-    }
+        #region Internal Fields
 
-    public string Nonce {
-      get {
-        return Parameters["nonce"];
-      }
-    }
+        internal NameValueCollection Parameters;
 
-    public string Opaque {
-      get {
-        return Parameters["opaque"];
-      }
-    }
+        #endregion
 
-    public string Qop {
-      get {
-        return Parameters["qop"];
-      }
-    }
+        #region Protected Constructors
 
-    public string Realm {
-      get {
-        return Parameters["realm"];
-      }
-    }
+        protected AuthenticationBase(AuthenticationSchemes scheme, NameValueCollection parameters)
+        {
+            _scheme = scheme;
+            Parameters = parameters;
+        }
 
-    public AuthenticationSchemes Scheme {
-      get {
-        return _scheme;
-      }
-    }
+        #endregion
 
-    #endregion
+        #region Public Properties
 
-    #region Internal Methods
+        public string Algorithm
+        {
+            get
+            {
+                return Parameters["algorithm"];
+            }
+        }
 
-    internal static string CreateNonceValue ()
-    {
-      var src = new byte[16];
-      var rand = new Random ();
-      rand.NextBytes (src);
+        public string Nonce
+        {
+            get
+            {
+                return Parameters["nonce"];
+            }
+        }
 
-      var res = new StringBuilder (32);
-      foreach (var b in src)
-        res.Append (b.ToString ("x2"));
+        public string Opaque
+        {
+            get
+            {
+                return Parameters["opaque"];
+            }
+        }
 
-      return res.ToString ();
-    }
+        public string Qop
+        {
+            get
+            {
+                return Parameters["qop"];
+            }
+        }
 
-    internal static NameValueCollection ParseParameters (string value)
-    {
-      var res = new NameValueCollection ();
-      foreach (var param in value.SplitHeaderValue (',')) {
-        var i = param.IndexOf ('=');
-        var name = i > 0 ? param.Substring (0, i).Trim () : null;
-        var val = i < 0
-                  ? param.Trim ().Trim ('"')
+        public string Realm
+        {
+            get
+            {
+                return Parameters["realm"];
+            }
+        }
+
+        public AuthenticationSchemes Scheme
+        {
+            get
+            {
+                return _scheme;
+            }
+        }
+
+        #endregion
+
+        #region Internal Methods
+
+        internal static string CreateNonceValue()
+        {
+            byte[] src = new byte[16];
+            Random rand = new();
+            rand.NextBytes(src);
+
+            StringBuilder res = new(32);
+            foreach (byte b in src)
+                _ = res.Append(b.ToString("x2"));
+
+            return res.ToString();
+        }
+
+        internal static NameValueCollection ParseParameters(string value)
+        {
+            NameValueCollection res = new();
+            foreach (string param in value.SplitHeaderValue(','))
+            {
+                int i = param.IndexOf('=');
+                string name = i > 0 ? param.Substring(0, i).Trim() : null;
+                string val = i < 0
+                  ? param.Trim().Trim('"')
                   : i < param.Length - 1
-                    ? param.Substring (i + 1).Trim ().Trim ('"')
+                    ? param.Substring(i + 1).Trim().Trim('"')
                     : String.Empty;
 
-        res.Add (name, val);
-      }
+                res.Add(name, val);
+            }
 
-      return res;
+            return res;
+        }
+
+        internal abstract string ToBasicString();
+
+        internal abstract string ToDigestString();
+
+        #endregion
+
+        #region Public Methods
+
+        public override string ToString()
+        {
+            return _scheme == AuthenticationSchemes.Basic
+                   ? ToBasicString()
+                   : _scheme == AuthenticationSchemes.Digest
+                     ? ToDigestString()
+                     : String.Empty;
+        }
+
+        #endregion
     }
-
-    internal abstract string ToBasicString ();
-
-    internal abstract string ToDigestString ();
-
-    #endregion
-
-    #region Public Methods
-
-    public override string ToString ()
-    {
-      return _scheme == AuthenticationSchemes.Basic
-             ? ToBasicString ()
-             : _scheme == AuthenticationSchemes.Digest
-               ? ToDigestString ()
-               : String.Empty;
-    }
-
-    #endregion
-  }
 }

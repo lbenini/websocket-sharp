@@ -41,211 +41,228 @@ using WebSocketSharp.Net;
 
 namespace WebSocketSharp
 {
-  internal class HttpRequest : HttpBase
-  {
-    #region Private Fields
-
-    private CookieCollection _cookies;
-    private string           _method;
-    private string           _target;
-
-    #endregion
-
-    #region Private Constructors
-
-    private HttpRequest (
-      string method,
-      string target,
-      Version version,
-      NameValueCollection headers
-    )
-      : base (version, headers)
+    internal class HttpRequest : HttpBase
     {
-      _method = method;
-      _target = target;
-    }
+        #region Private Fields
 
-    #endregion
+        private CookieCollection _cookies;
+        private readonly string _method;
+        private readonly string _target;
 
-    #region Internal Constructors
+        #endregion
 
-    internal HttpRequest (string method, string target)
-      : this (method, target, HttpVersion.Version11, new NameValueCollection ())
-    {
-      Headers["User-Agent"] = "websocket-sharp/1.0";
-    }
+        #region Private Constructors
 
-    #endregion
+        private HttpRequest(
+          string method,
+          string target,
+          Version version,
+          NameValueCollection headers
+        )
+          : base(version, headers)
+        {
+            _method = method;
+            _target = target;
+        }
 
-    #region Internal Properties
+        #endregion
 
-    internal string RequestLine {
-      get {
-        return String.Format (
-                 "{0} {1} HTTP/{2}{3}", _method, _target, ProtocolVersion, CrLf
-               );
-      }
-    }
+        #region Internal Constructors
 
-    #endregion
+        internal HttpRequest(string method, string target)
+          : this(method, target, HttpVersion.Version11, new NameValueCollection())
+        {
+            Headers["User-Agent"] = "websocket-sharp/1.0";
+        }
 
-    #region Public Properties
+        #endregion
 
-    public AuthenticationResponse AuthenticationResponse {
-      get {
-        var val = Headers["Authorization"];
+        #region Internal Properties
 
-        return val != null && val.Length > 0
-               ? AuthenticationResponse.Parse (val)
-               : null;
-      }
-    }
+        internal string RequestLine
+        {
+            get
+            {
+                return String.Format(
+                         "{0} {1} HTTP/{2}{3}", _method, _target, ProtocolVersion, CrLf
+                       );
+            }
+        }
 
-    public CookieCollection Cookies {
-      get {
-        if (_cookies == null)
-          _cookies = Headers.GetCookies (false);
+        #endregion
 
-        return _cookies;
-      }
-    }
+        #region Public Properties
 
-    public string HttpMethod {
-      get {
-        return _method;
-      }
-    }
+        public AuthenticationResponse AuthenticationResponse
+        {
+            get
+            {
+                string val = Headers["Authorization"];
 
-    public bool IsWebSocketRequest {
-      get {
-        return _method == "GET"
-               && ProtocolVersion > HttpVersion.Version10
-               && Headers.Upgrades ("websocket");
-      }
-    }
+                return val != null && val.Length > 0
+                       ? AuthenticationResponse.Parse(val)
+                       : null;
+            }
+        }
 
-    public override string MessageHeader {
-      get {
-        return RequestLine + HeaderSection;
-      }
-    }
+        public CookieCollection Cookies
+        {
+            get
+            {
+                if (_cookies == null)
+                    _cookies = Headers.GetCookies(false);
 
-    public string RequestTarget {
-      get {
-        return _target;
-      }
-    }
+                return _cookies;
+            }
+        }
 
-    #endregion
+        public string HttpMethod
+        {
+            get
+            {
+                return _method;
+            }
+        }
 
-    #region Internal Methods
+        public bool IsWebSocketRequest
+        {
+            get
+            {
+                return _method == "GET"
+                       && ProtocolVersion > HttpVersion.Version10
+                       && Headers.Upgrades("websocket");
+            }
+        }
 
-    internal static HttpRequest CreateConnectRequest (Uri targetUri)
-    {
-      var host = targetUri.DnsSafeHost;
-      var port = targetUri.Port;
-      var authority = String.Format ("{0}:{1}", host, port);
+        public override string MessageHeader
+        {
+            get
+            {
+                return RequestLine + HeaderSection;
+            }
+        }
 
-      var ret = new HttpRequest ("CONNECT", authority);
+        public string RequestTarget
+        {
+            get
+            {
+                return _target;
+            }
+        }
 
-      ret.Headers["Host"] = port != 80 ? authority : host;
+        #endregion
 
-      return ret;
-    }
+        #region Internal Methods
 
-    internal static HttpRequest CreateWebSocketHandshakeRequest (Uri targetUri)
-    {
-      var ret = new HttpRequest ("GET", targetUri.PathAndQuery);
+        internal static HttpRequest CreateConnectRequest(Uri targetUri)
+        {
+            string host = targetUri.DnsSafeHost;
+            int port = targetUri.Port;
+            string authority = String.Format("{0}:{1}", host, port);
 
-      var headers = ret.Headers;
+            HttpRequest ret = new("CONNECT", authority);
 
-      var port = targetUri.Port;
-      var schm = targetUri.Scheme;
-      var defaultPort = (port == 80 && schm == "ws")
+            ret.Headers["Host"] = port != 80 ? authority : host;
+
+            return ret;
+        }
+
+        internal static HttpRequest CreateWebSocketHandshakeRequest(Uri targetUri)
+        {
+            HttpRequest ret = new("GET", targetUri.PathAndQuery);
+
+            NameValueCollection headers = ret.Headers;
+
+            int port = targetUri.Port;
+            string schm = targetUri.Scheme;
+            bool defaultPort = (port == 80 && schm == "ws")
                         || (port == 443 && schm == "wss");
 
-      headers["Host"] = !defaultPort
-                        ? targetUri.Authority
-                        : targetUri.DnsSafeHost;
+            headers["Host"] = !defaultPort
+                              ? targetUri.Authority
+                              : targetUri.DnsSafeHost;
 
-      headers["Upgrade"] = "websocket";
-      headers["Connection"] = "Upgrade";
+            headers["Upgrade"] = "websocket";
+            headers["Connection"] = "Upgrade";
 
-      return ret;
+            return ret;
+        }
+
+        internal HttpResponse GetResponse(Stream stream, int millisecondsTimeout)
+        {
+            WriteTo(stream);
+
+            return HttpResponse.ReadResponse(stream, millisecondsTimeout);
+        }
+
+        internal static HttpRequest Parse(string[] messageHeader)
+        {
+            int len = messageHeader.Length;
+
+            if (len == 0)
+            {
+                string msg = "An empty request header.";
+
+                throw new ArgumentException(msg);
+            }
+
+            string[] rlParts = messageHeader[0].Split(new[] { ' ' }, 3);
+
+            if (rlParts.Length != 3)
+            {
+                string msg = "It includes an invalid request line.";
+
+                throw new ArgumentException(msg);
+            }
+
+            string method = rlParts[0];
+            string target = rlParts[1];
+            Version ver = rlParts[2].Substring(5).ToVersion();
+
+            WebHeaderCollection headers = new();
+
+            for (int i = 1; i < len; i++)
+                headers.InternalSet(messageHeader[i], false);
+
+            return new HttpRequest(method, target, ver, headers);
+        }
+
+        internal static HttpRequest ReadRequest(
+          Stream stream, int millisecondsTimeout
+        )
+        {
+            return Read<HttpRequest>(stream, Parse, millisecondsTimeout);
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public void SetCookies(CookieCollection cookies)
+        {
+            if (cookies == null || cookies.Count == 0)
+                return;
+
+            StringBuilder buff = new(64);
+
+            foreach (Cookie cookie in cookies.Sorted)
+            {
+                if (cookie.Expired)
+                    continue;
+
+                _ = buff.AppendFormat("{0}; ", cookie);
+            }
+
+            int len = buff.Length;
+
+            if (len <= 2)
+                return;
+
+            buff.Length = len - 2;
+
+            Headers["Cookie"] = buff.ToString();
+        }
+
+        #endregion
     }
-
-    internal HttpResponse GetResponse (Stream stream, int millisecondsTimeout)
-    {
-      WriteTo (stream);
-
-      return HttpResponse.ReadResponse (stream, millisecondsTimeout);
-    }
-
-    internal static HttpRequest Parse (string[] messageHeader)
-    {
-      var len = messageHeader.Length;
-
-      if (len == 0) {
-        var msg = "An empty request header.";
-
-        throw new ArgumentException (msg);
-      }
-
-      var rlParts = messageHeader[0].Split (new[] { ' ' }, 3);
-
-      if (rlParts.Length != 3) {
-        var msg = "It includes an invalid request line.";
-
-        throw new ArgumentException (msg);
-      }
-
-      var method = rlParts[0];
-      var target = rlParts[1];
-      var ver = rlParts[2].Substring (5).ToVersion ();
-
-      var headers = new WebHeaderCollection ();
-
-      for (var i = 1; i < len; i++)
-        headers.InternalSet (messageHeader[i], false);
-
-      return new HttpRequest (method, target, ver, headers);
-    }
-
-    internal static HttpRequest ReadRequest (
-      Stream stream, int millisecondsTimeout
-    )
-    {
-      return Read<HttpRequest> (stream, Parse, millisecondsTimeout);
-    }
-
-    #endregion
-
-    #region Public Methods
-
-    public void SetCookies (CookieCollection cookies)
-    {
-      if (cookies == null || cookies.Count == 0)
-        return;
-
-      var buff = new StringBuilder (64);
-
-      foreach (var cookie in cookies.Sorted) {
-        if (cookie.Expired)
-          continue;
-
-        buff.AppendFormat ("{0}; ", cookie);
-      }
-
-      var len = buff.Length;
-
-      if (len <= 2)
-        return;
-
-      buff.Length = len - 2;
-
-      Headers["Cookie"] = buff.ToString ();
-    }
-
-    #endregion
-  }
 }
